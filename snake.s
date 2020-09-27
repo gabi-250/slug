@@ -4,89 +4,89 @@
 _boot:
     cli
     xor %ax, %ax
-    mov	%ax, %ds
-    mov	%ax, %es
+    mov %ax, %ds
+    mov %ax, %es
     mov $STACK_SEGMENT, %ax
     mov %ax, %ss
     mov %ax, %bp
-    # the y-coordinate of the current piece
-    push $0
-    mov $145, %ax
-    push %ax # x coordinate
+    mov %sp, %bp
+
+    push %bp
+    mov %sp, %bp
+    # the direction
+    push $DOWN
+    # the y-coordinate of the snake
+    push $95
+    # the x-coordinate of the snake
+    push $155
+    call init_video
 tick:
-    call draw_frame
-    call draw_square
-
-    pop %ax # the x-coordinate of the piece
-
-    cmp $(GRID_X + GRID_WIDTH - SQUARE_SIZE), %ax
-    jge .Lhlt
-
-    cmp $GRID_X, %ax
-    jle .Lhlt
-    mov %ax, %cx
-
-    pop %ax # the y-coordinate of the piece
-
-    cmp $(GRID_Y + GRID_HEIGHT - SQUARE_SIZE), %ax
-    jge .Lhlt
-
-    add $SQUARE_SIZE, %ax
+    pop %bx
+    pop %cx
+    pop %ax
+    cmp $UP, %ax
+    jne try_right
+try_right:
+    cmp $RIGHT, %ax
+    jne try_down
+    add $SQUARE_SIZE, %bx
+    jmp draw
+try_down:
+    cmp $DOWN, %ax
+    jne try_left
+    add $SQUARE_SIZE, %cx
+    jmp draw
+try_left:
+    cmp $LEFT, %ax
+    jne try_up
+    sub $SQUARE_SIZE, %bx
+    jmp draw
+try_up:
+    sub $SQUARE_SIZE, %cx
+draw:
     push %ax
     push %cx
-
-   # # Pause for 1s (0xf4240 = 10^6 microseconds)
-   # mov $0x0f, %cx
-   # mov $0x4240, %dx
-
+    push %bx
+    call draw_square
     # Pause for 0.5s
     mov $0x07, %cx
     mov $0xa120, %dx
     mov $0x86, %ah
     int $0x15
+    # Check for keystroke
+    mov $1, %ah
+    int $0x16
+    # No keystroke - just keep drawing
+    jz tick
+    # Read the keystroke
+    mov $0, %ah
+    int $0x16
+    cmp $UP, %al
+    jne read_down
+    mov %al, -2(%bp)
     jmp tick
-.Lhlt:
+read_down:
+    cmp $DOWN, %al
+    jne read_left
+    mov %al, -2(%bp)
+    jmp tick
+read_left:
+    cmp $LEFT, %al
+    jne read_right
+    mov %al, -2(%bp)
+    jmp tick
+read_right:
+    cmp $RIGHT, %al
+    jne tick
+    mov %al, -2(%bp)
+    jmp tick
     hlt
 
-draw_frame:
-    call init_video
-    # y-coordinate
-    mov $GRID_Y, %dx
-    mov $GRID_X, %ax
-    mov %ax, %cx
-    add $GRID_WIDTH, %ax
-    mov %ax, %gs
-    mov $0xc01, %ax
-    call draw_horizontal
-
-    mov $GRID_HEIGHT - 1, %dx
-    mov $GRID_X, %ax
-    mov %ax, %cx
-    add $GRID_WIDTH, %ax
-    mov %ax, %gs
-    mov $0xc01, %ax
-    call draw_horizontal
-
-    mov $GRID_X, %cx
-    xor %dx, %dx
-    mov $GRID_HEIGHT, %ax
-    mov %ax, %gs
-    mov $0xc01, %ax
-    call draw_vertical
-
-    mov $(GRID_X + GRID_WIDTH), %cx
-    xor %dx, %dx
-    mov $GRID_HEIGHT, %ax
-    mov %ax, %gs
-    mov $0xc01, %ax
-    call draw_vertical
-    ret
-
 init_video:
-    # Set video mode
+    # Set the video mode...
     mov $0x0, %ah
-    # 80x25, colour
-    mov $0x04, %al
+    # VGA 320 x 200 colour
+    mov $0xd, %al
     int $0x10
     # Set the background colour
     mov $0xb, %ah
@@ -162,6 +162,10 @@ draw_square:
 .set STACK_SEGMENT, 0x9000
 .set SQUARE_SIZE, 10
 .set GRID_HEIGHT, 200
-.set GRID_WIDTH, 100
+.set GRID_WIDTH, 300
 .set GRID_X, 100
 .set GRID_Y, 0
+.set UP, 107
+.set RIGHT, 108
+.set DOWN, 106
+.set LEFT, 104
