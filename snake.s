@@ -16,35 +16,53 @@ _boot:
     # the direction
     push $DOWN
     # the y-coordinate of the snake
-    push $95
+    push $90
     # the x-coordinate of the snake
-    push $155
+    push $150
     call init_video
 tick:
     pop %bx
     pop %cx
-    pop %ax
-    cmp $UP, %ax
-    jne try_right
+    mov -2(%bp), %ax
 try_right:
     cmp $RIGHT, %ax
     jne try_down
-    add $SQUARE_SIZE, %bx
+
+    mov %bx, %ax
+    mov $GRID_WIDTH, %dx
+    push $1
+    call advance_snake
+    pop %bx
+    mov %ax, %bx
     jmp draw
 try_down:
     cmp $DOWN, %ax
     jne try_left
-    add $SQUARE_SIZE, %cx
+    mov %cx, %ax
+    mov $GRID_HEIGHT, %dx
+    push $1
+    call advance_snake
+    pop %cx
+    mov %ax, %cx
     jmp draw
 try_left:
     cmp $LEFT, %ax
     jne try_up
-    sub $SQUARE_SIZE, %bx
+    mov %bx, %ax
+    mov $GRID_WIDTH, %dx
+    push $0
+    call advance_snake
+    pop %bx
+    mov %ax, %bx
     jmp draw
 try_up:
-    sub $SQUARE_SIZE, %cx
+    mov %cx, %ax
+    mov $GRID_HEIGHT, %dx
+    push $0
+    call advance_snake
+    pop %cx
+    mov %ax, %cx
 draw:
-    push %ax
     push %cx
     push %bx
     call draw_square
@@ -81,6 +99,38 @@ read_right:
     mov %al, -2(%bp)
     jmp tick
     hlt
+
+# Move the snake one position forward, ensuring it comes out the other side
+# when it reaches the edge.
+#
+# AX - position to advance
+# DX - grid width/height
+# top of the stack - 1 if the snake is going forward, or 0, if it's going
+# backwards,
+advance_snake:
+    push %bp
+    mov %sp, %bp
+    push %cx
+    push %bx
+    mov 4(%bp), %bx
+    test %bx, %bx
+    je .Lsubtract
+    add $SQUARE_SIZE, %ax
+    mov %dx, %bx
+    xor %dx, %dx
+    div %bx
+    mov %dx, %ax
+    jmp 1f
+.Lsubtract:
+    sub $SQUARE_SIZE, %ax
+    test %ax, %ax
+    jge 1f
+    mov %dx, %ax
+1:
+    pop %bx
+    pop %cx
+    leave
+    ret
 
 init_video:
     # Set the video mode...
@@ -162,10 +212,11 @@ draw_square:
 .set STACK_SEGMENT, 0x9000
 .set SQUARE_SIZE, 10
 .set GRID_HEIGHT, 200
-.set GRID_WIDTH, 300
+.set GRID_WIDTH, 320
 .set GRID_X, 100
 .set GRID_Y, 0
 .set UP, 107
 .set RIGHT, 108
 .set DOWN, 106
 .set LEFT, 104
+SNAKE: .fill (GRID_HEIGHT * GRID_WIDTH) / (SQUARE_SIZE * SQUARE_SIZE * 8)
