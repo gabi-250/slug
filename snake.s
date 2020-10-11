@@ -4,8 +4,9 @@
 _boot:
     cli
     xor %ax, %ax
-    mov %ax, %ds
     mov %ax, %es
+    mov $DATA_SEGMENT, %ax
+    mov %ax, %ds
     mov $STACK_SEGMENT, %ax
     mov %ax, %ss
     mov %ax, %bp
@@ -15,14 +16,22 @@ _boot:
     mov %sp, %bp
     # the direction
     push $DOWN
+    # dummy colour
+    push $1
     # the y-coordinate of the snake
     push $90
     # the x-coordinate of the snake
     push $150
+    mov $90, %ax
+    mov %ax, SNAKE
+
+    mov $150, %ax
+    mov %ax, SNAKE + 1
     call init_video
 tick:
     pop %bx
     pop %cx
+    pop %ax
     mov -2(%bp), %ax
 try_right:
     cmp $RIGHT, %ax
@@ -63,7 +72,10 @@ try_up:
     pop %cx
     mov %ax, %cx
 draw:
+    push $0xc06
+    # push the y coordinate
     push %cx
+    # push the x coordinate
     push %bx
     call draw_square
     # Pause for 0.5s
@@ -191,7 +203,8 @@ draw_square:
     mov %ax, %gs
 
     mov -2(%bp), %dx
-    mov $0xc06, %ax
+    #mov $0xc06, %ax
+    mov 8(%bp), %ax
     call draw_horizontal
     pop %ax
     sub $1, %ax
@@ -205,11 +218,11 @@ draw_square:
     mov %ax, -2(%bp)
     jmp 1b
 .Ldone:
-    mov %bp, %sp
-    pop %bp
+    leave
     ret
 
 .set STACK_SEGMENT, 0x9000
+.set DATA_SEGMENT, 0x9100
 .set SQUARE_SIZE, 10
 .set GRID_HEIGHT, 200
 .set GRID_WIDTH, 320
@@ -219,4 +232,6 @@ draw_square:
 .set RIGHT, 108
 .set DOWN, 106
 .set LEFT, 104
-SNAKE: .fill (GRID_HEIGHT * GRID_WIDTH) / (SQUARE_SIZE * SQUARE_SIZE * 8)
+.set SNAKE_LEN, 0
+# A maximum of 50 coordinates
+SNAKE: .fill 100
