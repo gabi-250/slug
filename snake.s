@@ -27,6 +27,8 @@ _boot:
     mov $150, %ax
     mov %ax, SNAKE + 1
     call init_video
+
+    call draw_borders
 tick:
     pop %bx
     pop %cx
@@ -131,11 +133,15 @@ advance_snake:
     xor %dx, %dx
     div %bx
     mov %dx, %ax
+    test %ax, %ax
+    jne 1f
+    mov $SQUARE_SIZE, %ax
     jmp 1f
 .Lsubtract:
     sub $SQUARE_SIZE, %ax
     test %ax, %ax
-    jge 1f
+    jg 1f
+    sub $SQUARE_SIZE, %dx
     mov %dx, %ax
 1:
     pop %bx
@@ -189,6 +195,67 @@ draw_vertical:
     pop %ax
     ret
 
+draw_borders:
+    push %bp
+    mov %sp, %bp
+    # The number of times to repeat .Ldraw_horizontal_borders/.Ldraw_vertical_borders
+    push $2
+    # The border colour
+    push $0xc08
+    push $0
+    push $0
+.Ldraw_horizontal_borders:
+    call _keep_drawing
+    test %ax, %ax
+    je 2f
+1:
+    call draw_square
+    pop %ax
+    add $SQUARE_SIZE, %ax
+    push %ax
+    cmp $GRID_WIDTH, %ax
+    jne 1b
+    movw $0, -8(%bp)
+    movw $GRID_HEIGHT, -6(%bp)
+    jmp .Ldraw_horizontal_borders
+2:
+    movw $2, -2(%bp)
+    movw $0, -6(%bp)
+    movw $0, -8(%bp)
+.Ldraw_vertical_borders:
+    call _keep_drawing
+    test %ax, %ax
+    je 2f
+1:
+    call draw_square
+    mov -6(%bp), %ax
+    add $SQUARE_SIZE, %ax
+    mov %ax, -6(%bp)
+    cmp $(GRID_HEIGHT + SQUARE_SIZE), %ax
+    jne 1b
+    movw $0, -6(%bp)
+    pop %ax
+    push $GRID_WIDTH
+    jmp .Ldraw_vertical_borders
+2:
+    leave
+    ret
+
+_keep_drawing:
+    mov -2(%bp), %ax
+    test %ax, %ax
+    je .Lno
+    sub $1, %ax
+    mov %ax, -2(%bp)
+    jmp .Lyes
+.Lno:
+    mov $0, %ax
+    jmp 1f
+.Lyes:
+    mov $1, %ax
+1:
+    ret
+
 draw_square:
     push %bp
     mov %sp, %bp
@@ -223,8 +290,8 @@ draw_square:
 .set STACK_SEGMENT, 0x9000
 .set DATA_SEGMENT, 0x9100
 .set SQUARE_SIZE, 10
-.set GRID_HEIGHT, 200
-.set GRID_WIDTH, 320
+.set GRID_HEIGHT, 190
+.set GRID_WIDTH, 310
 .set GRID_X, 100
 .set GRID_Y, 0
 .set UP, 107
@@ -232,5 +299,5 @@ draw_square:
 .set DOWN, 106
 .set LEFT, 104
 .set SNAKE_LEN, 0
-# A maximum of 50 coordinates
-SNAKE: .fill 100
+# A maximum of 10 coordinates
+SNAKE: .fill 20
