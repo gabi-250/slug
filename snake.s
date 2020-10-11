@@ -12,10 +12,9 @@ _boot:
     mov %ax, %bp
     mov %sp, %bp
 
-    push %bp
-    mov %sp, %bp
-    # the direction
+    # the direction (stored at [BP])
     push $DOWN
+    mov %sp, %bp
     # dummy colour
     push $1
     # the y-coordinate of the snake
@@ -32,7 +31,7 @@ tick:
     pop %bx
     pop %cx
     pop %ax
-    mov -2(%bp), %ax
+    mov (%bp), %ax
 try_right:
     cmp $RIGHT, %ax
     jne try_down
@@ -93,22 +92,22 @@ draw:
     int $0x16
     cmp $UP, %al
     jne read_down
-    mov %al, -2(%bp)
+    mov %al, (%bp)
     jmp tick
 read_down:
     cmp $DOWN, %al
     jne read_left
-    mov %al, -2(%bp)
+    mov %al, (%bp)
     jmp tick
 read_left:
     cmp $LEFT, %al
     jne read_right
-    mov %al, -2(%bp)
+    mov %al, (%bp)
     jmp tick
 read_right:
     cmp $RIGHT, %al
     jne tick
-    mov %al, -2(%bp)
+    mov %al, (%bp)
     jmp tick
     hlt
 
