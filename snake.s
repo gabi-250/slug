@@ -9,40 +9,33 @@ _boot:
     mov %ax, %ds
     mov $STACK_SEGMENT, %ax
     mov %ax, %ss
-    mov %ax, %bp
     mov %sp, %bp
-
     # the direction (stored at [BP])
     push $DOWN
     mov %sp, %bp
+    # current index in SLUG
+    push $0
     # dummy colour
     push $1
-    # the y-coordinate of the snake
-    push $90
-    # the x-coordinate of the snake
-    push $150
-    mov $90, %ax
-    mov %ax, SNAKE
-
+    # the x-coordinate of the slug
     mov $150, %ax
-    mov %ax, SNAKE + 1
+    mov %ax, SLUG
+    # the y-coordinate of the slug
+    mov $90, %ax
+    mov %ax, SLUG + 2
     call init_video
-
     call draw_borders
 tick:
-    pop %bx
-    pop %cx
     pop %ax
+    mov SLUG, %bx
+    mov (SLUG + 2), %cx
     mov (%bp), %ax
 try_right:
     cmp $RIGHT, %ax
     jne try_down
-
     mov %bx, %ax
     mov $GRID_WIDTH, %dx
-    push $1
-    call advance_snake
-    pop %bx
+    call slug_forward
     mov %ax, %bx
     jmp draw
 try_down:
@@ -50,9 +43,7 @@ try_down:
     jne try_left
     mov %cx, %ax
     mov $GRID_HEIGHT, %dx
-    push $1
-    call advance_snake
-    pop %cx
+    call slug_forward
     mov %ax, %cx
     jmp draw
 try_left:
@@ -60,19 +51,18 @@ try_left:
     jne try_up
     mov %bx, %ax
     mov $GRID_WIDTH, %dx
-    push $0
-    call advance_snake
-    pop %bx
+    call slug_backward
     mov %ax, %bx
     jmp draw
 try_up:
     mov %cx, %ax
     mov $GRID_HEIGHT, %dx
-    push $0
-    call advance_snake
-    pop %cx
+    call slug_backward
     mov %ax, %cx
 draw:
+    # Store the new slug coordinates
+    mov %bx, SLUG
+    mov %cx, (SLUG + 2)
     push $0xc06
     # push the y coordinate
     push %cx
@@ -113,40 +103,37 @@ read_right:
     jmp tick
     hlt
 
-# Move the snake one position forward, ensuring it comes out the other side
+# Move the slug one square forward, ensuring it comes out the other side
 # when it reaches the edge.
 #
 # AX - position to advance
 # DX - grid width/height
-# top of the stack - 1 if the snake is going forward, or 0, if it's going
-# backwards,
-advance_snake:
-    push %bp
-    mov %sp, %bp
-    push %cx
+slug_forward:
     push %bx
-    mov 4(%bp), %bx
-    test %bx, %bx
-    je .Lsubtract
     add $SQUARE_SIZE, %ax
     mov %dx, %bx
     xor %dx, %dx
     div %bx
     mov %dx, %ax
+    pop %bx
     test %ax, %ax
     jne 1f
     mov $SQUARE_SIZE, %ax
-    jmp 1f
-.Lsubtract:
+1:
+    ret
+
+# Move the slug back one square, ensuring it comes out the other side
+# when it reaches the edge.
+#
+# AX - position to advance
+# DX - grid width/height
+slug_backward:
     sub $SQUARE_SIZE, %ax
     test %ax, %ax
     jg 1f
     sub $SQUARE_SIZE, %dx
     mov %dx, %ax
 1:
-    pop %bx
-    pop %cx
-    leave
     ret
 
 init_video:
@@ -298,6 +285,6 @@ draw_square:
 .set RIGHT, 108
 .set DOWN, 106
 .set LEFT, 104
-.set SNAKE_LEN, 0
+.set SLUG_LEN, 0
 # A maximum of 10 coordinates
-SNAKE: .fill 20
+SLUG: .fill 20
