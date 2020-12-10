@@ -10,26 +10,24 @@ _boot:
     mov $STACK_SEGMENT, %ax
     mov %ax, %ss
     mov %sp, %bp
-    # the direction (stored at [BP])
+    # the direction
     push $DOWN
-    mov %sp, %bp
     # current index in SLUG
     push $0
     # dummy colour
     push $1
     # the x-coordinate of the slug
     mov $150, %ax
-    mov %ax, SLUG
+    mov %ax, SLUG + SLUG_HEAD
     # the y-coordinate of the slug
     mov $90, %ax
-    mov %ax, SLUG + 2
+    mov %ax, SLUG + SLUG_HEAD + 2
     call init_video
     call draw_borders
 tick:
-    pop %ax
-    mov SLUG, %bx
-    mov (SLUG + 2), %cx
-    mov (%bp), %ax
+    mov SLUG + SLUG_HEAD, %bx
+    mov (SLUG + SLUG_HEAD + 2), %cx
+    mov -2(%bp), %ax
 try_right:
     cmp $RIGHT, %ax
     jne try_down
@@ -60,15 +58,31 @@ try_up:
     call slug_backward
     mov %ax, %cx
 draw:
+    # Save the new slug coordinates
+    push %bx
+    push %cx
+    # Delete the tail
+    push $0xc02
+    # push the y coordinate
+    push SLUG + SLUG_TAIL + 2
+    # push the x coordinate
+    push SLUG + SLUG_TAIL
+    call draw_square
+    add $6, %sp
+    pop %cx
+    pop %bx
+
     # Store the new slug coordinates
-    mov %bx, SLUG
-    mov %cx, (SLUG + 2)
+    mov %bx, SLUG + SLUG_HEAD
+    mov %cx, (SLUG + SLUG_HEAD + 2)
     push $0xc06
     # push the y coordinate
     push %cx
     # push the x coordinate
     push %bx
     call draw_square
+    add $6, %sp
+
     # Pause for 0.5s
     mov $0x07, %cx
     mov $0xa120, %dx
@@ -84,22 +98,22 @@ draw:
     int $0x16
     cmp $UP, %al
     jne read_down
-    mov %al, (%bp)
+    mov %al, -2(%bp)
     jmp tick
 read_down:
     cmp $DOWN, %al
     jne read_left
-    mov %al, (%bp)
+    mov %al, -2(%bp)
     jmp tick
 read_left:
     cmp $LEFT, %al
     jne read_right
-    mov %al, (%bp)
+    mov %al, -2(%bp)
     jmp tick
 read_right:
     cmp $RIGHT, %al
     jne tick
-    mov %al, (%bp)
+    mov %al, -2(%bp)
     jmp tick
     hlt
 
@@ -153,6 +167,8 @@ init_video:
 # CX - start x pos
 # GS - end x pos
 draw_horizontal:
+    push %bp
+    mov %sp, %bp
     push %ax
 .Ldraw_horizontal:
     pop %ax
@@ -163,7 +179,7 @@ draw_horizontal:
     add $1, %cx
     cmp %ax, %cx
     jl .Ldraw_horizontal
-    pop %ax
+    leave
     ret
 
 # DX - start y pos
@@ -256,16 +272,13 @@ draw_square:
     mov %ax, %gs
 
     mov -2(%bp), %dx
-    #mov $0xc06, %ax
     mov 8(%bp), %ax
     call draw_horizontal
     pop %ax
     sub $1, %ax
     push %ax
     cmp $0, %ax
-    jg 2f
-    jmp .Ldone
-2:
+    jle .Ldone
     mov -2(%bp), %ax
     add $1, %ax
     mov %ax, -2(%bp)
@@ -285,6 +298,7 @@ draw_square:
 .set RIGHT, 108
 .set DOWN, 106
 .set LEFT, 104
-.set SLUG_LEN, 0
+.set SLUG_HEAD, 0
+.set SLUG_TAIL, 0
 # A maximum of 10 coordinates
 SLUG: .fill 20
