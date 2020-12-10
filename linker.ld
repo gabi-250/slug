@@ -6,7 +6,7 @@ SECTIONS
     . = 0x7c00;
     .text :
     {
-        snake.o(.*)
+        slug.o(.*)
         /* Set the location counter to 0x1fe = 510 */
         . = 0x1fe;
         /* The boot signature */

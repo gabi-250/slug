@@ -1,5 +1,5 @@
-BOOT := snake
-OBJS := snake.o
+BOOT := slug
+OBJS := slug.o
 
 .PHONY: all clean qemu
 
