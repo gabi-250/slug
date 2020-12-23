@@ -1,6 +1,8 @@
     .code16
     .text
     .global _boot
+    .include "macros.s"
+
 _boot:
     cli
     xor %ax, %ax
@@ -22,7 +24,7 @@ _boot:
     # the y-coordinate of the slug
     mov $90, %ax
     mov %ax, SLUG + SLUG_HEAD + 2
-    call init_video
+    init_video
     call draw_borders
 tick:
     mov SLUG + SLUG_HEAD, %bx
@@ -84,10 +86,7 @@ draw:
     add $6, %sp
 
     # Pause for 0.5s
-    mov $0x07, %cx
-    mov $0xa120, %dx
-    mov $0x86, %ah
-    int $0x15
+    pause ms=500
     # Check for keystroke
     mov $1, %ah
     int $0x16
@@ -150,20 +149,6 @@ slug_backward:
 1:
     ret
 
-init_video:
-    # Set the video mode...
-    mov $0x0, %ah
-    # VGA 320 x 200 colour
-    mov $0xd, %al
-    int $0x10
-    # Set the background colour
-    mov $0xb, %ah
-    mov $0, %bh
-    # 2 = green
-    mov $2, %bl
-    int $0x10
-    ret
-
 # CX - start x pos
 # GS - end x pos
 draw_horizontal:
@@ -208,7 +193,7 @@ draw_borders:
     push $0
     push $0
 .Ldraw_horizontal_borders:
-    call _keep_drawing
+    call keep_drawing
     test %ax, %ax
     je 2f
 1:
@@ -226,7 +211,7 @@ draw_borders:
     movw $0, -6(%bp)
     movw $0, -8(%bp)
 .Ldraw_vertical_borders:
-    call _keep_drawing
+    call keep_drawing
     test %ax, %ax
     je 2f
 1:
@@ -244,18 +229,17 @@ draw_borders:
     leave
     ret
 
-_keep_drawing:
+keep_drawing:
     mov -2(%bp), %ax
     test %ax, %ax
     je .Lno
     sub $1, %ax
     mov %ax, -2(%bp)
-    jmp .Lyes
-.Lno:
-    mov $0, %ax
-    jmp 1f
 .Lyes:
     mov $1, %ax
+    jmp 1f
+.Lno:
+    mov $0, %ax
 1:
     ret
 

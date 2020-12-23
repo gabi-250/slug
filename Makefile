@@ -1,5 +1,5 @@
 BOOT := slug
-OBJS := slug.o
+OBJS := slug.o macros.o
 
 .PHONY: all clean qemu
 
