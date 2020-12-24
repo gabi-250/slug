@@ -19,13 +19,13 @@ _boot:
     # dummy colour
     push $1
     # the x-coordinate of the slug
-    mov $150, %ax
+    mov $70, %ax
     mov %ax, SLUG + SLUG_HEAD
     # the y-coordinate of the slug
     mov $90, %ax
     mov %ax, SLUG + SLUG_HEAD + 2
     init_video
-    call draw_borders
+    #call draw_borders
 .Ltick:
     mov SLUG + SLUG_HEAD, %bx
     mov (SLUG + SLUG_HEAD + 2), %cx
@@ -60,6 +60,13 @@ _boot:
     call slug_backward
     mov %ax, %cx
 .Ldraw:
+    cmp $50, %bx
+    jne 1f
+    cmp $50, %cx
+    jne 1f
+    hlt
+
+1:
     # Save the new slug coordinates
     push %bx
     push %cx
@@ -68,6 +75,9 @@ _boot:
     draw_square x=SLUG + SLUG_TAIL, y=SLUG + SLUG_TAIL + 2, colour=$0xc02
     # Draw a red square
     draw_square x=$50, y=$50, colour=$0xc04
+
+    # Draw a blue square
+    draw_square x=$20, y=$20, colour=$0xc01
 
     pop %cx
     pop %bx
@@ -138,8 +148,8 @@ slug_forward:
 # DX - grid width/height
 slug_backward:
     sub $SQUARE_SIZE, %ax
-    test %ax, %ax
-    jg 1f
+    cmp $0, %ax
+    jge 1f
     sub $SQUARE_SIZE, %dx
     mov %dx, %ax
 1:
@@ -179,66 +189,6 @@ draw_vertical:
     pop %ax
     ret
 
-draw_borders:
-    push %bp
-    mov %sp, %bp
-    # The number of times to repeat .Ldraw_horizontal_borders/.Ldraw_vertical_borders
-    push $2
-    # The border colour
-    push $0xc08
-    push $0
-    push $0
-.Ldraw_horizontal_borders:
-    call keep_drawing
-    test %ax, %ax
-    je 2f
-1:
-    call draw_square
-    pop %ax
-    add $SQUARE_SIZE, %ax
-    push %ax
-    cmp $GRID_WIDTH, %ax
-    jne 1b
-    movw $0, -8(%bp)
-    movw $GRID_HEIGHT, -6(%bp)
-    jmp .Ldraw_horizontal_borders
-2:
-    movw $2, -2(%bp)
-    movw $0, -6(%bp)
-    movw $0, -8(%bp)
-.Ldraw_vertical_borders:
-    call keep_drawing
-    test %ax, %ax
-    je 2f
-1:
-    call draw_square
-    mov -6(%bp), %ax
-    add $SQUARE_SIZE, %ax
-    mov %ax, -6(%bp)
-    cmp $(GRID_HEIGHT + SQUARE_SIZE), %ax
-    jne 1b
-    movw $0, -6(%bp)
-    pop %ax
-    push $GRID_WIDTH
-    jmp .Ldraw_vertical_borders
-2:
-    leave
-    ret
-
-keep_drawing:
-    mov -2(%bp), %ax
-    test %ax, %ax
-    je .Lno
-    sub $1, %ax
-    mov %ax, -2(%bp)
-.Lyes:
-    mov $1, %ax
-    jmp 1f
-.Lno:
-    mov $0, %ax
-1:
-    ret
-
 draw_square:
     push %bp
     mov %sp, %bp
@@ -270,8 +220,8 @@ draw_square:
 .set STACK_SEGMENT, 0x9000
 .set DATA_SEGMENT, 0x9100
 .set SQUARE_SIZE, 10
-.set GRID_HEIGHT, 190
-.set GRID_WIDTH, 310
+.set GRID_HEIGHT, 200
+.set GRID_WIDTH, 320
 .set GRID_X, 100
 .set GRID_Y, 0
 .set UP, 107
@@ -281,4 +231,4 @@ draw_square:
 .set SLUG_HEAD, 0
 .set SLUG_TAIL, 0
 # A maximum of 10 coordinates
-SLUG: .fill 10
+SLUG: .fill 2
