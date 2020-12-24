@@ -1,5 +1,3 @@
-.code16
-
 .macro init_video
     # Set the video mode...
     mov $0x0, %ah
@@ -22,3 +20,10 @@
     int $0x15
 .endm
 
+.macro draw_square x, y, colour=0xc0a
+    push \colour
+    push \y
+    push \x
+    call draw_square
+    add $6, %sp
+.endm

@@ -26,64 +26,59 @@ _boot:
     mov %ax, SLUG + SLUG_HEAD + 2
     init_video
     call draw_borders
-tick:
+.Ltick:
     mov SLUG + SLUG_HEAD, %bx
     mov (SLUG + SLUG_HEAD + 2), %cx
     mov -2(%bp), %ax
-try_right:
+.Ltry_right:
     cmp $RIGHT, %ax
-    jne try_down
+    jne .Ltry_down
     mov %bx, %ax
     mov $GRID_WIDTH, %dx
     call slug_forward
     mov %ax, %bx
-    jmp draw
-try_down:
+    jmp .Ldraw
+.Ltry_down:
     cmp $DOWN, %ax
-    jne try_left
+    jne .Ltry_left
     mov %cx, %ax
     mov $GRID_HEIGHT, %dx
     call slug_forward
     mov %ax, %cx
-    jmp draw
-try_left:
+    jmp .Ldraw
+.Ltry_left:
     cmp $LEFT, %ax
-    jne try_up
+    jne .Ltry_up
     mov %bx, %ax
     mov $GRID_WIDTH, %dx
     call slug_backward
     mov %ax, %bx
-    jmp draw
-try_up:
+    jmp .Ldraw
+.Ltry_up:
     mov %cx, %ax
     mov $GRID_HEIGHT, %dx
     call slug_backward
     mov %ax, %cx
-draw:
+.Ldraw:
     # Save the new slug coordinates
     push %bx
     push %cx
+
     # Delete the tail
-    push $0xc02
-    # push the y coordinate
-    push SLUG + SLUG_TAIL + 2
-    # push the x coordinate
-    push SLUG + SLUG_TAIL
-    call draw_square
-    add $6, %sp
+    draw_square x=SLUG + SLUG_TAIL, y=SLUG + SLUG_TAIL + 2, colour=$0xc02
+    # Draw a red square
+    draw_square x=$50, y=$50, colour=$0xc04
+
     pop %cx
     pop %bx
 
     # Store the new slug coordinates
     mov %bx, SLUG + SLUG_HEAD
     mov %cx, (SLUG + SLUG_HEAD + 2)
-    push $0xc06
-    # push the y coordinate
-    push %cx
-    # push the x coordinate
-    push %bx
-    call draw_square
-    add $6, %sp
+
+    # Draw the slug
+    # XXX draw the whole slug, not just the head
+    draw_square x=%bx, y=%cx, colour=$0xc0a
 
     # Pause for 0.5s
     pause ms=500
@@ -91,29 +86,29 @@ draw:
     mov $1, %ah
     int $0x16
     # No keystroke - just keep drawing
-    jz tick
+    jz .Ltick
     # Read the keystroke
-    mov $0, %ah
+    xor %ax, %ax
     int $0x16
     cmp $UP, %al
-    jne read_down
+    jne .Lread_down
     mov %al, -2(%bp)
-    jmp tick
-read_down:
+    jmp .Ltick
+.Lread_down:
     cmp $DOWN, %al
-    jne read_left
+    jne .Lread_left
     mov %al, -2(%bp)
-    jmp tick
-read_left:
+    jmp .Ltick
+.Lread_left:
     cmp $LEFT, %al
-    jne read_right
+    jne .Lread_right
     mov %al, -2(%bp)
-    jmp tick
-read_right:
+    jmp .Ltick
+.Lread_right:
     cmp $RIGHT, %al
-    jne tick
+    jne .Ltick
     mov %al, -2(%bp)
-    jmp tick
+    jmp .Ltick
     hlt
 
 # Move the slug one square forward, ensuring it comes out the other side
@@ -122,6 +117,7 @@ read_right:
 # AX - position to advance
 # DX - grid width/height
 slug_forward:
+    # clobber bx..
     push %bx
     add $SQUARE_SIZE, %ax
     mov %dx, %bx
@@ -285,4 +281,4 @@ draw_square:
 .set SLUG_HEAD, 0
 .set SLUG_TAIL, 0
 # A maximum of 10 coordinates
-SLUG: .fill 20
+SLUG: .fill 10
