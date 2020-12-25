@@ -18,17 +18,18 @@ _boot:
     push $0
     # dummy colour
     push $1
+    push $SLUG_HEAD
     # the x-coordinate of the slug
-    mov $70, %ax
-    mov %ax, SLUG + SLUG_HEAD
+    push $60
     # the y-coordinate of the slug
-    mov $90, %ax
-    mov %ax, SLUG + SLUG_HEAD + 2
+    push $80
+    call write_coords
+    add $6, %sp
     init_video
-    #call draw_borders
 .Ltick:
-    mov SLUG + SLUG_HEAD, %bx
-    mov (SLUG + SLUG_HEAD + 2), %cx
+    push $SLUG_HEAD
+    call read_coords
+    pop %ax
     mov -2(%bp), %ax
 .Ltry_right:
     cmp $RIGHT, %ax
@@ -60,22 +61,24 @@ _boot:
     call slug_backward
     mov %ax, %cx
 .Ldraw:
-    cmp $50, %bx
+    cmp $60, %bx
     jne 1f
-    cmp $50, %cx
+    cmp $60, %cx
     jne 1f
-    hlt
-
+    #hlt
 1:
     # Save the new slug coordinates
     push %bx
     push %cx
 
-    # Delete the tail
-    draw_square x=SLUG + SLUG_TAIL, y=SLUG + SLUG_TAIL + 2, colour=$0xc02
-    # Draw a red square
-    draw_square x=$50, y=$50, colour=$0xc04
+    push $SLUG_TAIL
+    call read_coords
+    pop %ax
 
+    # Delete the tail
+    draw_square x=%bx, y=%cx, colour=$0xc02
+    # Draw a red square
+    draw_square x=$60, y=$60, colour=$0xc04
     # Draw a blue square
     draw_square x=$20, y=$20, colour=$0xc01
 
@@ -83,8 +86,13 @@ _boot:
     pop %bx
 
     # Store the new slug coordinates
-    mov %bx, SLUG + SLUG_HEAD
-    mov %cx, (SLUG + SLUG_HEAD + 2)
+    push $SLUG_HEAD
+    push %cx
+    push %bx
+    call write_coords
+    pop %bx
+    pop %cx
+    pop %ax
 
     # Draw the slug
     # XXX draw the whole slug, not just the head
@@ -120,6 +128,63 @@ _boot:
     mov %al, -2(%bp)
     jmp .Ltick
     hlt
+
+write_coords:
+    push %bp
+    mov %sp, %bp
+    # x-coordinate
+    xor %dx, %dx
+    mov 4(%bp), %ax
+    mov $20, %bx
+    idiv %bx
+    # Save the x-coordinate, because we clobber %bx when computing
+    # the y-coordinate
+    push %ax
+    # y-coordinate
+    xor %dx, %dx
+    mov 6(%bp), %ax
+    mov $20, %bx
+    idiv %bx
+    mov %ax, %cx
+    # Restore the x-coordinate and move it into the highest order 4 bits
+    # of AL
+    pop %bx
+    xor %ax, %ax
+    mov %bl, %al
+    shl $4, %al
+    add %cl, %al
+    # Get the position in the array
+    mov 8(%bp), %bx
+    mov %al, SLUG(%bx)
+    leave
+    ret
+
+read_coords:
+    push %bp
+    mov %sp, %bp
+    mov 4(%bp), %bx
+    mov SLUG(%bx), %al
+
+    mov %al, %bl
+    mov %al, %cl
+
+    xor %ah, %ah
+    # x-coordinate
+    shr $4, %al
+    mov $20, %dx
+    mul %dx
+    mov %ax, %bx
+
+    xor %ah, %ah
+    # y-coordinate
+    and $0b1111, %cl
+    mov $20, %dx
+    mov %cl, %al
+    mul %dx
+    mov %ax, %cx
+
+    leave
+    ret
 
 # Move the slug one square forward, ensuring it comes out the other side
 # when it reaches the edge.
@@ -219,7 +284,7 @@ draw_square:
 
 .set STACK_SEGMENT, 0x9000
 .set DATA_SEGMENT, 0x9100
-.set SQUARE_SIZE, 10
+.set SQUARE_SIZE, 20
 .set GRID_HEIGHT, 200
 .set GRID_WIDTH, 320
 .set GRID_X, 100
@@ -230,5 +295,9 @@ draw_square:
 .set LEFT, 104
 .set SLUG_HEAD, 0
 .set SLUG_TAIL, 0
-# A maximum of 10 coordinates
-SLUG: .fill 2
+# A maximum of 160 coordinates
+# The grid is 320 pixels wide and 200 pixels high. Since we use 20x20 squares,
+# each position on the x-axis is between 0 and 16, and each position on
+# the y-axis is between 0 and 10, so we only need 4 bits to represent each
+# coordinate (10 * 16 * 4 bits = 80 bytes)
+SLUG: .fill 10
