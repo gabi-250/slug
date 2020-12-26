@@ -25,5 +25,7 @@
     push \y
     push \x
     call draw_square
-    add $6, %sp
+    pop %bx
+    pop %cx
+    pop %ax
 .endm

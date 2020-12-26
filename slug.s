@@ -3,32 +3,46 @@
     .global _boot
     .include "macros.s"
 
+# Stack layout:
+#
+# |     ...    |    BP
+# |------------|
+# |  direction | -2(BP)
+# |------------|
+# |    head    | -4(BP)
+# |------------|
+# |    tail    | -6(BP)
+# |------------|
+# |            | -7(BP)
+# |    SLUG    |   ...
+# |            | -166(BP)
+# |------------|
 _boot:
     cli
     xor %ax, %ax
-    mov %ax, %es
-    mov $DATA_SEGMENT, %ax
-    mov %ax, %ds
     mov $STACK_SEGMENT, %ax
     mov %ax, %ss
     mov %sp, %bp
     # the direction
     push $DOWN
-    # current index in SLUG
+    # SLUG head
     push $0
-    # dummy colour
-    push $1
+    # SLUG tail
+    push $0
+    sub $SLUG_LEN, %sp
     # the x-coordinate of the slug
     mov $60, %bx
     # the y-coordinate of the slug
     mov $80, %cx
-    # the index in SLUG
-    push SLUG_HEAD
+
+    lea SLUG_START(%bp), %ax
+    mov %ax, %gs
+    mov -4(%bp), %di
     call write_coords
-    pop %ax
     init_video
 .Ltick:
-    mov SLUG_HEAD, %bx
+    mov -4(%bp), %di
+    lea SLUG_START(%bp), %bx
     call read_coords
     mov -2(%bp), %ax
 .Ltry_right:
@@ -71,48 +85,37 @@ _boot:
     # Grow the snake
     jmp .Lgrow
 .Lerase_tail:
-    mov SLUG_TAIL, %bx
+    mov -6(%bp), %di
+    lea SLUG_START(%bp), %bx
     call read_coords
 
     # Delete the tail
     draw_square x=%bx, y=%cx, colour=$0xc02
 
     # Advance the tail
-    mov SLUG_TAIL, %ax
-
-    add $1, %ax
-    mov $SLUG_LEN, %bl
-    div %bl
-    mov %ah, %al
-    xor %ah, %ah
-    movw %ax, SLUG_TAIL
-    mov SLUG_TAIL, %dx
+    mov -6(%bp), %ax
+    call increment_end
+    mov %ax, -6(%bp)
     # Draw a red square
     draw_square x=$60, y=$60, colour=$0xc04
     # Draw a blue square
     draw_square x=$20, y=$20, colour=$0xc01
 .Lgrow:
     # Store the new slug coordinates
-    mov SLUG_HEAD, %ax
-    add $1, %ax
-    mov $SLUG_LEN, %dl
-    div %dl
-    mov %ah, %al
-    xor %ah, %ah
-    mov %ax, SLUG_HEAD
+    mov -4(%bp), %ax
+    call increment_end
+    mov %ax, -4(%bp)
 
-    pop %cx
-    pop %bx
-    push %bx
-    push %cx
-    push SLUG_HEAD
-    call write_coords
-    pop %ax
     pop %cx
     pop %bx
 
     # Draw the next position
     draw_square x=%bx, y=%cx, colour=$0xc0a
+
+    lea SLUG_START(%bp), %ax
+    mov %ax, %gs
+    mov -4(%bp), %di
+    call write_coords
 
     # Pause for 0.5s
     pause ms=500
@@ -145,12 +148,20 @@ _boot:
     jmp .Ltick
     hlt
 
+# AX - the head/tail of SLUG
+increment_end:
+    add $1, %ax
+    mov $SLUG_LEN, %bl
+    div %bl
+    mov %ah, %al
+    xor %ah, %ah
+    ret
+
 # BX - the x-coordinate
 # CX - the y-coordinate
-# top of the stack - the index in SLUG where to write the coordinates
+# GS - the SLUG
+# DI - the index in SLUG where to write the coordinates
 write_coords:
-    push %bp
-    mov %sp, %bp
     # x-coordinate
     xor %dx, %dx
     mov %bx, %ax
@@ -166,16 +177,15 @@ write_coords:
     # Now move the x-coordinate and into the highest order 4 bits of AL
     shl $4, %bl
     add %bl, %al
-    # Get the position in the array
-    mov 4(%bp), %bx
-
-    mov %al, SLUG(%bx)
-    leave
+    # SLUG
+    mov %gs, %bx
+    mov %al, (%bx, %di)
     ret
 
-# BX - the index of the coordinate to read
+# BX - the SLUG
+# DI - the index of the coordinate to read
 read_coords:
-    mov SLUG(%bx), %al
+    mov (%bx, %di), %al
     # Save AL
     mov %al, %cl
     xor %ah, %ah
@@ -231,8 +241,6 @@ slug_backward:
 # CX - start x pos
 # GS - end x pos
 draw_horizontal:
-    push %bp
-    mov %sp, %bp
     push %ax
 .Ldraw_horizontal:
     pop %ax
@@ -243,7 +251,7 @@ draw_horizontal:
     add $1, %cx
     cmp %ax, %cx
     jl .Ldraw_horizontal
-    leave
+    pop %ax
     ret
 
 # DX - start y pos
@@ -299,12 +307,10 @@ draw_square:
 .set RIGHT, 108
 .set DOWN, 106
 .set LEFT, 104
-SLUG_HEAD: .short 0
-SLUG_TAIL: .short 0
 # A maximum of 160 coordinates
 # The grid is 320 pixels wide and 200 pixels high. Since we use 20x20 squares,
 # each position on the x-axis is between 0 and 16, and each position on
 # the y-axis is between 0 and 10, so we only need 4 bits to represent each
 # coordinate (10 * 16 * 4 bits = 80 bytes)
-SLUG: .fill 3
-.set SLUG_LEN, 3
+.set SLUG_LEN, 80
+.set SLUG_START, -(SLUG_LEN + 6)
