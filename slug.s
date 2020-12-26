@@ -23,11 +23,12 @@ _boot:
     # the y-coordinate of the slug
     mov $80, %cx
     # the index in SLUG
-    mov $SLUG_HEAD, %dx
+    push SLUG_HEAD
     call write_coords
+    pop %ax
     init_video
 .Ltick:
-    mov $SLUG_HEAD, %bx
+    mov SLUG_HEAD, %bx
     call read_coords
     mov -2(%bp), %ax
 .Ltry_right:
@@ -60,41 +61,57 @@ _boot:
     call slug_backward
     mov %ax, %cx
 .Ldraw:
-    cmp $60, %bx
-    jne 1f
-    cmp $60, %cx
-    jne 1f
-    # XXX grow the snake
-    #jmp 2f
-1:
     # Save the new slug coordinates
     push %bx
     push %cx
-
-    mov $SLUG_TAIL, %bx
+    cmp $60, %bx
+    jne .Lerase_tail
+    cmp $60, %cx
+    jne .Lerase_tail
+    # Grow the snake
+    jmp .Lgrow
+.Lerase_tail:
+    mov SLUG_TAIL, %bx
     call read_coords
 
     # Delete the tail
     draw_square x=%bx, y=%cx, colour=$0xc02
+
+    # Advance the tail
+    mov SLUG_TAIL, %ax
+
+    add $1, %ax
+    mov $SLUG_LEN, %bl
+    div %bl
+    mov %ah, %al
+    xor %ah, %ah
+    movw %ax, SLUG_TAIL
+    mov SLUG_TAIL, %dx
     # Draw a red square
     draw_square x=$60, y=$60, colour=$0xc04
     # Draw a blue square
     draw_square x=$20, y=$20, colour=$0xc01
+.Lgrow:
+    # Store the new slug coordinates
+    mov SLUG_HEAD, %ax
+    add $1, %ax
+    mov $SLUG_LEN, %dl
+    div %dl
+    mov %ah, %al
+    xor %ah, %ah
+    mov %ax, SLUG_HEAD
 
     pop %cx
     pop %bx
     push %bx
     push %cx
-
-2:
-    # Store the new slug coordinates
-    mov $SLUG_HEAD, %dx
+    push SLUG_HEAD
     call write_coords
+    pop %ax
     pop %cx
     pop %bx
 
-    # Draw the slug
-    # XXX draw the whole slug, not just the head
+    # Draw the next position
     draw_square x=%bx, y=%cx, colour=$0xc0a
 
     # Pause for 0.5s
@@ -130,8 +147,10 @@ _boot:
 
 # BX - the x-coordinate
 # CX - the y-coordinate
-# DX - the index in SLUG where to write the coordinates
+# top of the stack - the index in SLUG where to write the coordinates
 write_coords:
+    push %bp
+    mov %sp, %bp
     # x-coordinate
     xor %dx, %dx
     mov %bx, %ax
@@ -148,8 +167,10 @@ write_coords:
     shl $4, %bl
     add %bl, %al
     # Get the position in the array
-    mov %dx, %bx
+    mov 4(%bp), %bx
+
     mov %al, SLUG(%bx)
+    leave
     ret
 
 # BX - the index of the coordinate to read
@@ -270,21 +291,20 @@ draw_square:
     ret
 
 .set STACK_SEGMENT, 0x9000
-.set DATA_SEGMENT, 0x9100
+.set DATA_SEGMENT, 0x9300
 .set SQUARE_SIZE, 20
 .set GRID_HEIGHT, 200
 .set GRID_WIDTH, 320
-.set GRID_X, 100
-.set GRID_Y, 0
 .set UP, 107
 .set RIGHT, 108
 .set DOWN, 106
 .set LEFT, 104
-.set SLUG_HEAD, 0
-.set SLUG_TAIL, 0
+SLUG_HEAD: .short 0
+SLUG_TAIL: .short 0
 # A maximum of 160 coordinates
 # The grid is 320 pixels wide and 200 pixels high. Since we use 20x20 squares,
 # each position on the x-axis is between 0 and 16, and each position on
 # the y-axis is between 0 and 10, so we only need 4 bits to represent each
 # coordinate (10 * 16 * 4 bits = 80 bytes)
-SLUG: .fill 30
+SLUG: .fill 3
+.set SLUG_LEN, 3
