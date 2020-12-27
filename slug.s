@@ -13,9 +13,15 @@
 # |------------|
 # |    tail    | -6(BP)
 # |------------|
-# |            | -7(BP)
+# |  target-x  | -8(BP)
+# |------------|
+# |  target-y  | -10(BP)
+# |------------|
+# |            | -11(BP)
+# |            |
 # |    SLUG    |   ...
-# |            | -166(BP)
+# |            |
+# |            | -90(BP)
 # |------------|
 _boot:
     cli
@@ -29,6 +35,10 @@ _boot:
     push $0
     # SLUG tail
     push $0
+    # Target-x
+    push $60
+    # Target-y
+    push $80
     sub $SLUG_LEN, %sp
     # the x-coordinate of the slug
     mov $60, %bx
@@ -39,7 +49,9 @@ _boot:
     mov %ax, %gs
     mov -4(%bp), %di
     call write_coords
-    init_video
+    # 2 = green
+    mov $002, %bx
+    call init_video
 .Ltick:
     mov -4(%bp), %di
     lea SLUG_START(%bp), %bx
@@ -65,22 +77,22 @@ _boot:
     cmp $LEFT, %ax
     jne .Ltry_up
     mov %bx, %ax
-    mov $GRID_WIDTH, %dx
+    mov $(GRID_WIDTH - SQUARE_SIZE), %dx
     call slug_backward
     mov %ax, %bx
     jmp .Ldraw
 .Ltry_up:
     mov %cx, %ax
-    mov $GRID_HEIGHT, %dx
+    mov $(GRID_HEIGHT- SQUARE_SIZE), %dx
     call slug_backward
     mov %ax, %cx
 .Ldraw:
     # Save the new slug coordinates
     push %bx
     push %cx
-    cmp $60, %bx
+    cmp -8(%bp), %bx
     jne .Lerase_tail
-    cmp $60, %cx
+    cmp -10(%bp), %cx
     jne .Lerase_tail
     # Grow the snake
     jmp .Lgrow
@@ -96,10 +108,10 @@ _boot:
     mov -6(%bp), %ax
     call increment_end
     mov %ax, -6(%bp)
-    # Draw a red square
-    draw_square x=$60, y=$60, colour=$0xc04
+
+
     # Draw a blue square
-    draw_square x=$20, y=$20, colour=$0xc01
+   # draw_square x=$20, y=$20, colour=$0xc01
 .Lgrow:
     # Store the new slug coordinates
     mov -4(%bp), %ax
@@ -117,6 +129,19 @@ _boot:
     mov -4(%bp), %di
     call write_coords
 
+    mov -8(%bp), %bx
+    mov -10(%bp), %cx
+    call compress_coords
+    mov %al, %cl
+    lea SLUG_START(%bp), %bx
+    mov -6(%bp), %di
+    mov -4(%bp), %si
+    call coord_in_slug
+    test %al, %al
+    jnz .Lread_input
+    # Draw a red square
+    draw_square x=-8(%bp), y=-10(%bp), colour=$0xc04
+.Lread_input:
     # Pause for 0.5s
     pause ms=500
     # Check for keystroke
@@ -128,25 +153,34 @@ _boot:
     xor %ax, %ax
     int $0x16
     cmp $UP, %al
-    jne .Lread_down
     mov %al, -2(%bp)
+    jne .Lread_down
     jmp .Ltick
 .Lread_down:
     cmp $DOWN, %al
     jne .Lread_left
-    mov %al, -2(%bp)
     jmp .Ltick
 .Lread_left:
     cmp $LEFT, %al
     jne .Lread_right
-    mov %al, -2(%bp)
     jmp .Ltick
 .Lread_right:
     cmp $RIGHT, %al
     jne .Ltick
-    mov %al, -2(%bp)
     jmp .Ltick
+.Lhlt:
     hlt
+
+# BX - the backgorund colour
+init_video:
+    # Set the video mode to VGA 320 x 200 colour
+    mov $0x00d, %ax
+    int $0x10
+    # Set the background colour
+    mov $0xb, %ah
+    int $0x10
+    jmp .Ltick
+    ret
 
 # AX - the head/tail of SLUG
 increment_end:
@@ -162,24 +196,31 @@ increment_end:
 # GS - the SLUG
 # DI - the index in SLUG where to write the coordinates
 write_coords:
+    call compress_coords
+    # SLUG
+    mov %gs, %bx
+    mov %al, (%bx, %di)
+    ret
+
+# BX - the x-coordinate
+# CX - the y-coordinate
+# AL - the coordinates stored as 4-bit values
+compress_coords:
     # x-coordinate
     xor %dx, %dx
     mov %bx, %ax
-    mov $20, %bx
+    mov $SQUARE_SIZE, %bx
     div %bx
     mov %ax, %bx
     # y-coordinate (don't bother zeroing out DX, because the remainder
     # of the previous division will be 0 anyway)
     mov %cx, %ax
-    mov $20, %cx
+    mov $SQUARE_SIZE, %cx
     div %cx
     # At this point, the lower 4 bits of AL contain the y-coordinate.
     # Now move the x-coordinate and into the highest order 4 bits of AL
     shl $4, %bl
     add %bl, %al
-    # SLUG
-    mov %gs, %bx
-    mov %al, (%bx, %di)
     ret
 
 # BX - the SLUG
@@ -191,17 +232,41 @@ read_coords:
     xor %ah, %ah
     # x-coordinate
     shr $4, %al
-    mov $20, %dx
+    mov $SQUARE_SIZE, %dx
     mul %dx
     mov %ax, %bx
-
     xor %ah, %ah
     # y-coordinate
     and $0b1111, %cl
-    mov $20, %dx
+    mov $SQUARE_SIZE, %dx
     mov %cl, %al
     mul %dx
     mov %ax, %cx
+    ret
+
+# BX - the SLUG
+# CL - the coordinates to search for
+# DI - the tail
+# SI - the head
+#
+# AL - whether the coordinate was found
+coord_in_slug:
+    mov (%bx, %di), %al
+    cmp %al, %cl
+    je .Lfound
+    cmp %si, %di
+    je .Lnot_found
+    mov %di, %ax
+    push %bx
+    call increment_end
+    pop %bx
+    mov %ax, %di
+    jmp coord_in_slug
+.Lnot_found:
+    xor %al, %al
+    ret
+.Lfound:
+    mov $1, %al
     ret
 
 # Move the slug one square forward, ensuring it comes out the other side
@@ -210,65 +275,26 @@ read_coords:
 # AX - position to advance
 # DX - grid width/height
 slug_forward:
-    # clobber bx..
-    push %bx
     add $SQUARE_SIZE, %ax
-    mov %dx, %bx
+    mov %dx, %di
     xor %dx, %dx
-    div %bx
+    div %di
     mov %dx, %ax
-    pop %bx
-    test %ax, %ax
-    jge 1f
-    mov $SQUARE_SIZE, %ax
-1:
     ret
 
 # Move the slug back one square, ensuring it comes out the other side
 # when it reaches the edge.
 #
 # AX - position to advance
-# DX - grid width/height
+# DX - grid width/height - SQUARE_SIZE
 slug_backward:
     sub $SQUARE_SIZE, %ax
     test %ax, %ax
     jge 1f
-    sub $SQUARE_SIZE, %dx
     mov %dx, %ax
 1:
     ret
 
-# CX - start x pos
-# GS - end x pos
-draw_horizontal:
-    push %ax
-.Ldraw_horizontal:
-    pop %ax
-    push %ax
-    xor %bh, %bh
-    int $0x10
-    mov %gs, %ax
-    add $1, %cx
-    cmp %ax, %cx
-    jl .Ldraw_horizontal
-    pop %ax
-    ret
-
-# DX - start y pos
-# GS - end y pos
-draw_vertical:
-    push %ax
-.Ldraw_vertical:
-    add $1, %dx
-    pop %ax
-    push %ax
-    xor %bh, %bh
-    int $0x10
-    mov %gs, %ax
-    cmp %ax, %dx
-    jne .Ldraw_vertical
-    pop %ax
-    ret
 
 draw_square:
     push %bp
@@ -278,23 +304,30 @@ draw_square:
     push $SQUARE_SIZE
 1:
     mov 4(%bp), %cx
-    mov 4(%bp), %ax
+    mov %cx, %ax
     add $SQUARE_SIZE, %ax
     mov %ax, %gs
 
     mov -2(%bp), %dx
-    mov 8(%bp), %ax
-    call draw_horizontal
+    mov 8(%bp), %es
+.Ldraw_horizontal:
+    mov %es, %ax
+    xor %bh, %bh
+    int $0x10
+    mov %gs, %ax
+    add $1, %cx
+    cmp %ax, %cx
+    jl .Ldraw_horizontal
     pop %ax
     sub $1, %ax
     push %ax
     test %ax, %ax
-    jle .Ldone
+    jle .Ldone_draw_square
     mov -2(%bp), %ax
     add $1, %ax
     mov %ax, -2(%bp)
     jmp 1b
-.Ldone:
+.Ldone_draw_square:
     leave
     ret
 
@@ -313,4 +346,4 @@ draw_square:
 # the y-axis is between 0 and 10, so we only need 4 bits to represent each
 # coordinate (10 * 16 * 4 bits = 80 bytes)
 .set SLUG_LEN, 80
-.set SLUG_START, -(SLUG_LEN + 6)
+.set SLUG_START, -(SLUG_LEN + 10)
