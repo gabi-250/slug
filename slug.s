@@ -1,3 +1,17 @@
+#      ___           ___       ___           ___
+#     /\  \         /\__\     /\__\         /\  \
+#    /::\  \       /:/  /    /:/  /        /::\  \
+#   /:/\ \  \     /:/  /    /:/  /        /:/\:\  \
+#  _\:\~\ \  \   /:/  /    /:/  /  ___   /:/  \:\  \
+# /\ \:\ \ \__\ /:/__/    /:/__/  /\__\ /:/__/_\:\__\
+# \:\ \:\ \/__/ \:\  \    \:\  \ /:/  / \:\  /\ \/__/
+#  \:\ \:\__\    \:\  \    \:\  /:/  /   \:\ \:\__\
+#   \:\/:/  /     \:\  \    \:\/:/  /     \:\/:/  /
+#    \::/  /       \:\__\    \::/  /       \::/  /
+#     \/__/         \/__/     \/__/         \/__/
+#
+#
+# A 512-byte x86 bootsector game.
     .code16
     .text
     .global _boot
@@ -49,8 +63,8 @@ _boot:
     lea SLUG_START(%bp), %bx
     mov -4(%bp), %di
     write_coords slug=%bx, coords=%al, pos=%di
-    # 2 = green
-    mov $002, %bx
+    # 7 = grey
+    mov $7, %bx
     call init_video
 .Ltick:
     mov -4(%bp), %di
@@ -114,7 +128,7 @@ _boot:
     lea SLUG_START(%bp), %bx
     call read_coords
     # Delete the tail
-    draw_square x=%bx, y=%cx, colour=$0xc02
+    draw_square x=%bx, y=%cx, colour=$0xc07
     # Advance the tail
     mov -6(%bp), %ax
     call increment_end
@@ -124,7 +138,6 @@ _boot:
     mov -4(%bp), %ax
     call increment_end
     mov %ax, -4(%bp)
-
     # Store the new slug coordinates
     lea SLUG_START(%bp), %bx
     mov -4(%bp), %di
@@ -163,7 +176,10 @@ _boot:
     call init_video
     hlt
 
-# BX - the backgorund colour
+# Set the video mode and the background colour.
+#
+# Arguments:
+#   BX - the backgorund colour
 init_video:
     # Set the video mode to VGA 320 x 200 colour
     mov $0xd, %ax
@@ -174,6 +190,13 @@ init_video:
     ret
 
 # AX - the head/tail of SLUG
+#
+# Calculate the value of (AX + 1) mod SLUG_LEN
+#
+# Arguments:
+#   AX - the value to increment (SLUG_HEAD or SLUG_TAIL)
+# Returns:
+#   AX - (AX + 1) mod SLUG_LEN
 increment_end:
     add $1, %ax
     mov $SLUG_LEN, %bl
@@ -182,9 +205,13 @@ increment_end:
     xor %ah, %ah
     ret
 
-# BX - the x-coordinate
-# CX - the y-coordinate
-# AL - the coordinates stored as 4-bit values
+# Store the SLUG coordinates in a single byte.
+#
+# Arguments:
+#   BX - the x-coordinate
+#   CX - the y-coordinate
+# Returns:
+#   AL - the coordinates stored as 4-bit values (AH = BX, AL = CX)
 compress_coords:
     # x-coordinate
     xor %dx, %dx
@@ -203,16 +230,13 @@ compress_coords:
     add %bl, %al
     ret
 
-# BX - the SLUG
-# DI - the index of the coordinate to read
-read_coords:
-    mov (%bx, %di), %al
-    call decompress_coords
-    ret
-
-# AL - the coordinates stored as 4-bit values
-# BX - the x-coordinate
-# CX - the y-coordinate
+# Extract the SLUG coordinates from AL.
+#
+# Arguments:
+#   AL - the coordinates stored as 4-bit values (AH = BX, AL = CX)
+# Returns:
+#   BX - the x-coordinate
+#   CX - the y-coordinate
 decompress_coords:
     # Save AL
     mov %al, %cl
@@ -231,12 +255,28 @@ decompress_coords:
     mov %ax, %cx
     ret
 
-# BX - the SLUG
-# CL - the coordinates to search for
-# DI - the tail
-# SI - the head
+# Read the coordinates stored at the specified SLUG index.
 #
-# AL - whether the coordinate was found
+# Arguments:
+#   BX - the SLUG
+#   DI - the index of the coordinate to read
+# Returns:
+#   BX - the x-coordinate
+#   CX - the y-coordinate
+read_coords:
+    mov (%bx, %di), %al
+    call decompress_coords
+    ret
+
+# Check whether the specified coordinates exist in the SLUG array.
+#
+# Arguments:
+#   BX - SLUG
+#   CL - the coordinates to search for (stored as two 4-bit values)
+#   DI - the tail
+#   SI - the head
+# Returns:
+#   AL - whether the coordinate was found
 coord_in_slug:
     mov (%bx, %di), %al
     cmp %al, %cl
@@ -259,8 +299,9 @@ coord_in_slug:
 # Move the slug one square forward, ensuring it comes out the other side
 # when it reaches the edge.
 #
-# AX - position to advance
-# DX - grid width/height
+# Arguments:
+#   AX - position to advance
+#   DX - grid width/height
 slug_forward:
     add $SQUARE_SIZE, %ax
     mov %dx, %di
@@ -272,8 +313,9 @@ slug_forward:
 # Move the slug back one square, ensuring it comes out the other side
 # when it reaches the edge.
 #
-# AX - position to advance
-# DX - grid width/height - SQUARE_SIZE
+# Arguments:
+#   AX - position to advance
+#   DX - grid width/height - SQUARE_SIZE
 slug_backward:
     sub $SQUARE_SIZE, %ax
     test %ax, %ax
@@ -282,10 +324,16 @@ slug_backward:
 1:
     ret
 
+# Draw a square.
+#
+# Arguments:
+#   8(%bp) - colour
+#   6(%bp) - y-coordinate
+#   4(%bp) - x-coordinate
 draw_square:
     push %bp
     mov %sp, %bp
-    # save the y-coordinate
+    # Save the y-coordinate
     push 6(%bp)
     push $SQUARE_SIZE
 1:
