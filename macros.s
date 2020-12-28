@@ -15,3 +15,8 @@
     pop %cx
     pop %ax
 .endm
+
+.macro write_coords slug, coords, pos
+    mov \slug, %bx
+    mov \coords, (%bx, \pos)
+.endm
