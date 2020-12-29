@@ -36,7 +36,7 @@
 # |               | -88(BP)
 # |---------------|
 _boot:
-    cli
+    #cli
     xor %ax, %ax
     mov $STACK_SEGMENT, %ax
     mov %ax, %ss
@@ -47,12 +47,9 @@ _boot:
     push $0
     # SLUG tail
     push $0
-    # Target-x
-    mov $60, %bx
-    # Target-y
-    mov $80, %cx
-    call compress_coords
-    push %ax
+    # Target coordinates
+    call gen_random_coord
+    push %dx
     sub $SLUG_LEN, %sp
     # the x-coordinate of the slug
     mov $60, %bx
@@ -121,6 +118,9 @@ _boot:
     # Check if the slug reached the target
     cmp -8(%bp), %al
     jne .Lerase_tail
+    # Create a new random target
+    call gen_random_coord
+    mov %dx, -8(%bp)
     # Grow the slug
     jmp .Lgrow
 .Lerase_tail:
@@ -249,8 +249,8 @@ decompress_coords:
     xor %ah, %ah
     # y-coordinate
     and $0b1111, %cl
-    mov $SQUARE_SIZE, %dx
     mov %cl, %al
+    mov $SQUARE_SIZE, %dx
     mul %dx
     mov %ax, %cx
     ret
@@ -321,6 +321,22 @@ slug_backward:
     test %ax, %ax
     jge 1f
     mov %dx, %ax
+1:
+    ret
+
+# Generate a random coordinate.
+# Returns:
+#   DX - the coordinate
+gen_random_coord:
+    mov $0, %ah
+    int $0x1a
+    mov %dx, %ax
+    and $0b1111, %al
+    # Make sure the coordinate is within bounds.
+    cmp $(GRID_HEIGHT - SQUARE_SIZE) / SQUARE_SIZE, %al
+    jle 1f
+    and $0b1111, %dl
+    add $(GRID_HEIGHT - SQUARE_SIZE) / SQUARE_SIZE, %dl
 1:
     ret
 
