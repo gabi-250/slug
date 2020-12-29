@@ -158,8 +158,8 @@ _boot:
     # Draw a red square
     draw_square x=%bx, y=%cx, colour=$0xc04
 .Lread_input:
-    # Pause for 0.5s
-    pause ms=500
+    # Pause for 0.25s
+    pause ms=250
     # Check for keystroke
     mov $1, %ah
     int $0x16
